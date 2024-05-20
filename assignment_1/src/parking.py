@@ -54,24 +54,23 @@ class Node:
 
 # 알고리즘 파라미터를 저장하는 클래스 정의
 class Para:
-    def __init__(self, minx, miny, maxx, maxy, xw, yw, reso, motion):
+    def __init__(self, minx, miny, maxx, maxy, xw, yw, motion):
         self.minx = minx  # 그리드의 최소 x 좌표
         self.miny = miny  # 그리드의 최소 y 좌표
         self.maxx = maxx  # 그리드의 최대 x 좌표
         self.maxy = maxy  # 그리드의 최대 y 좌표
         self.xw = xw      # x축의 너비 (최대 x - 최소 x)
         self.yw = yw      # y축의 높이 (최대 y - 최소 y)
-        self.reso = reso  # 그리드 해상도
         self.motion = motion  # 가능한 이동 방향 (벡터) 리스트
 
 # A* 경로 탐색 함수
-def astar_planning(sx, sy, gx, gy, reso):
+def astar_planning(sx, sy, gx, gy):
     # 시작 노드와 목표 노드를 초기화
-    n_start = Node(round(sx / reso), round(sy / reso), 0.0, -1)  # round() 입력된 숫자를 가장 가까운 정수로 반올림
-    n_goal = Node(round(gx / reso), round(gy / reso), 0.0, -1)
+    n_start = Node(sx,sy, 0.0, -1)  # round() 입력된 숫자를 가장 가까운 정수로 반올림
+    n_goal = Node(gx,gy, 0.0, -1)
 
     # 파라미터 객체 생성, 예제 그리드 크기 사용
-    P = Para(0, 0, 1200, 850, 1200, 850, reso, get_motion())
+    P = Para(0, 0, 1200, 850, 1200, 850, get_motion())
 
     # 열린 집합과 닫힌 집합을 사전으로 초기화
     open_set, closed_set = dict(), dict() # dict()는 파이썬에서 사전(dictionary) 객체를 생성하는 내장 함수입니다. 사전은 키(key)와 값(value)의 쌍을 저장하는 자료 구조이다. 해쉬테이블
@@ -84,14 +83,12 @@ def astar_planning(sx, sy, gx, gy, reso):
 
     # 주 탐색 루프
     while True:
-        print("Open set size:", len(open_set))
         if not open_set: # 열린 목록이 비게 된다면 탐색 중단
             break
 
         # 현재 노드를 우선순위 큐에서 꺼냄
         _, ind = heapq.heappop(q_priority)  # 큐에서 꺼내면 가장 작은 비용을 가진 노드의 비용과 인덱스가 추출
         n_curr = open_set[ind]              # 그 인덱스를 열린목록에 넣기
-        print("Processing node:", n_curr.x, n_curr.y)
         closed_set[ind] = n_curr            # 현재 노드를 닫힌 목록에 넣기
         open_set.pop(ind)                   # 열린 목록에서 제거
         if calc_index(n_curr, P) == calc_index(n_goal, P):
@@ -154,8 +151,8 @@ def extract_path(closed_set, n_start, n_goal, P):
         n_ind = node.pind
 
     # 좌표를 실제 스케일로 조정
-    pathx = [x * P.reso for x in reversed(pathx)]
-    pathy = [y * P.reso for y in reversed(pathy)]
+    pathx = [x for x in reversed(pathx)]
+    pathy = [y for y in reversed(pathy)]
 
     return pathx, pathy
 
@@ -170,7 +167,7 @@ def planning(sx, sy, syaw, max_acceleration, dt):
     global rx, ry
     print("Start Planning")
     # A* 알고리즘 실행
-    rx, ry = astar_planning(sx, sy, 1036, 162, 1.0)
+    rx, ry = astar_planning(sx, sy, 1036, 162)
     return rx, ry
 
 #=============================================
