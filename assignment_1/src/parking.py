@@ -156,6 +156,29 @@ def extract_path(closed_set, n_start, n_goal, P):
 
     return pathx, pathy
 
+# P_ENTRY부터 P_END까지의 좌표 리스트 생성 함수
+def generate_coordinates(p_entry, p_end, num_points=100):
+    x1, y1 = p_entry
+    x2, y2 = p_end
+    
+    x_coords = np.linspace(x1, x2, num_points)
+    y_coords = np.linspace(y1, y2, num_points)
+    
+    rx = x_coords.tolist()
+    ry = y_coords.tolist()
+    
+    return rx, ry
+
+# A* 경로 탐색 후 P_ENTRY부터 P_END까지의 좌표 리스트 추가
+def extend_path_with_parking(rx, ry, p_entry, p_end):
+    parking_rx, parking_ry = generate_coordinates(p_entry, p_end)
+    
+    # 기존 경로에 주차 경로 추가
+    rx.extend(parking_rx)
+    ry.extend(parking_ry)
+    
+    return rx, ry
+
 
 #=============================================
 # 경로를 생성하는 함수
@@ -168,6 +191,7 @@ def planning(sx, sy, syaw, max_acceleration, dt):
     print("Start Planning")
     # A* 알고리즘 실행
     rx, ry = astar_planning(sx, sy, 1036, 162)
+    rx, ry = extend_path_with_parking(rx, ry, P_ENTRY, P_END)
     return rx, ry
 
 #=============================================
@@ -182,4 +206,3 @@ def tracking(screen, x, y, yaw, velocity, max_acceleration, dt):
     speed = 50 # -50 ~ 50
     
     drive(angle, speed)
-
