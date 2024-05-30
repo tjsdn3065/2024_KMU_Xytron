@@ -44,117 +44,101 @@ def drive(angle, speed):
     motor_pub.publish(xycar_msg)
 
 
-# 그리드 상의 노드를 나타내는 클래스 정의
-class Node:
-    def __init__(self, x, y, cost, pind):
-        self.x = x  # 노드의 x 좌표
-        self.y = y  # 노드의 y 좌표
-        self.cost = cost  # 시작 노드부터 현재 노드까지의 경로 비용
-        self.pind = pind  # 부모 노드의 인덱스
+# parameter
+MAX_T = 100.0  # 목표에 도달하기 위한 최대 허용 시간 (초)
+MIN_T = 5.0    # 목표에 도달하기 위한 최소 허용 시간 (초)
 
-# 알고리즘 파라미터를 저장하는 클래스 정의
-class Para:
-    def __init__(self, minx, miny, maxx, maxy, xw, yw, motion):
-        self.minx = minx  # 그리드의 최소 x 좌표
-        self.miny = miny  # 그리드의 최소 y 좌표
-        self.maxx = maxx  # 그리드의 최대 x 좌표
-        self.maxy = maxy  # 그리드의 최대 y 좌표
-        self.xw = xw      # x축의 너비 (최대 x - 최소 x)
-        self.yw = yw      # y축의 높이 (최대 y - 최소 y)
-        self.motion = motion  # 가능한 이동 방향 (벡터) 리스트
+class QuinticPolynomial:
+    def __init__(self, xs, vxs, axs, xe, vxe, axe, time):
+        # 시작 위치, 속도, 가속도, 목표 위치, 속도, 가속도와 경로 계획 시간을 기반으로 초기 계수 설정
+        self.a0 = xs
+        self.a1 = vxs
+        self.a2 = axs / 2.0
 
-# A* 경로 탐색 함수
-def astar_planning(sx, sy, gx, gy):
-    # 시작 노드와 목표 노드를 초기화
-    n_start = Node(sx,sy, 0.0, -1)  # round() 입력된 숫자를 가장 가까운 정수로 반올림
-    n_goal = Node(gx,gy, 0.0, -1)
+        # 5차 다항식의 나머지 계수(a3, a4, a5)를 계산하기 위한 선형 방정식 세우기
+        A = np.array([[time ** 3, time ** 4, time ** 5],
+                      [3 * time ** 2, 4 * time ** 3, 5 * time ** 4],
+                      [6 * time, 12 * time ** 2, 20 * time ** 3]])
+        b = np.array([xe - self.a0 - self.a1 * time - self.a2 * time ** 2,
+                      vxe - self.a1 - 2 * self.a2 * time,
+                      axe - 2 * self.a2])
+        x = np.linalg.solve(A, b)  # 선형 방정식 해결하여 계수 찾기
 
-    # 파라미터 객체 생성, 예제 그리드 크기 사용
-    P = Para(0, 0, 1200, 850, 1200, 850, get_motion())
+        self.a3 = x[0]
+        self.a4 = x[1]
+        self.a5 = x[2]
 
-    # 열린 집합과 닫힌 집합을 사전으로 초기화
-    open_set, closed_set = dict(), dict() # dict()는 파이썬에서 사전(dictionary) 객체를 생성하는 내장 함수입니다. 사전은 키(key)와 값(value)의 쌍을 저장하는 자료 구조이다. 해쉬테이블
-    open_set[calc_index(n_start, P)] = n_start
+    # 특정 시간에서 위치 반환
+    def calc_point(self, t):
+        return self.a0 + self.a1 * t + self.a2 * t ** 2 + self.a3 * t ** 3 + self.a4 * t ** 4 + self.a5 * t ** 5
 
-    # 우선순위 큐 초기화 및 시작 노드 추가
-    q_priority = []
-    heapq.heappush(q_priority, (fvalue(n_start, n_goal), calc_index(n_start, P)))
-    # heapq.heappush(heap, item) 함수는 item을 heap에 추가하면서 힙의 속성을 유지합니다. 여기서 item은 튜플 (fvalue(n_start, n_goal), calc_index(n_start, P))입니다.
+    # 특정 시간에서의 속도 반환
+    def calc_first_derivative(self, t):
+        return self.a1 + 2 * self.a2 * t + 3 * self.a3 * t ** 2 + 4 * self.a4 * t ** 3 + 5 * self.a5 * t ** 4
 
-    # 주 탐색 루프
-    while True:
-        if not open_set: # 열린 목록이 비게 된다면 탐색 중단
-            break
+    # 특정 시간에서의 가속도 반환
+    def calc_second_derivative(self, t):
+        return 2 * self.a2 + 6 * self.a3 * t + 12 * self.a4 * t ** 2 + 20 * self.a5 * t ** 3
 
-        # 현재 노드를 우선순위 큐에서 꺼냄
-        _, ind = heapq.heappop(q_priority)  # 큐에서 꺼내면 가장 작은 비용을 가진 노드의 비용과 인덱스가 추출
-        n_curr = open_set[ind]              # 그 인덱스를 열린목록에 넣기
-        closed_set[ind] = n_curr            # 현재 노드를 닫힌 목록에 넣기
-        open_set.pop(ind)                   # 열린 목록에서 제거
-        if calc_index(n_curr, P) == calc_index(n_goal, P):
-            break  # 목표 노드 도달 시 종료
+    # 특정 시간에서의 저크 반환
+    def calc_third_derivative(self, t):
+        return 6 * self.a3 + 24 * self.a4 * t + 60 * self.a5 * t ** 2
 
+def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt):
+    # 시작 조건과 목표 조건에서의 속도와 가속도 벡터 계산
+    vxs = sv * math.cos(syaw)
+    vys = sv * math.sin(syaw)
+    vxg = gv * math.cos(gyaw)
+    vyg = gv * math.sin(gyaw)
 
-        # 가능한 모든 이동 방향에 대해 루프
-        for i in range(len(P.motion)):      # 인접한 노드의 비용 계산, 현재 노드를 부모 노드로 지정
-            node = Node(n_curr.x + P.motion[i][0],
-                        n_curr.y + P.motion[i][1],
-                        n_curr.cost + u_cost(P.motion[i]), ind)
+    axs = sa * math.cos(syaw)
+    ays = sa * math.sin(syaw)
+    axg = ga * math.cos(gyaw)
+    ayg = ga * math.sin(gyaw)
 
-            n_ind = calc_index(node, P)     # 인접한 노드의 인덱스
-            if n_ind not in closed_set:     # 닫힌 목록에 없는 노드이고
-                if n_ind in open_set:       
-                    if open_set[n_ind].cost > node.cost:    # 인접한 노드가 이미 기존의 열린 목록에 있다면 현재 노드를 기준으로 해당 인접한 노드까지 이동할 때 비용이 낮아지는 지 확인
-                        open_set[n_ind].cost = node.cost    # 비용이 더 낮아지지 않으면 아무것도 하지 않는다
-                        open_set[n_ind].pind = ind          # 만약 현재 노드를 통해 해당 인접 노드까지 이동하는데 비용이 더 낮게 니온다면
-                else:                                       # 해당 인접 노드의 부모 노드를 현재 노드로 바꾼다 그리고 해당 인접 노드의 비용을 다시 계산
-                    open_set[n_ind] = node
-                    heapq.heappush(q_priority,
-                                   (fvalue(node, n_goal), calc_index(node, P)))
+    # 최소 시간부터 최대 시간까지의 간격으로 5차 다항식 경로 시도
+    for T in np.arange(MIN_T, MAX_T, MIN_T):
+        xqp = QuinticPolynomial(sx, vxs, axs, gx, vxg, axg, T)
+        yqp = QuinticPolynomial(sy, vys, ays, gy, vyg, ayg, T)
 
-    # 최종 경로 추출
-    pathx, pathy = extract_path(closed_set, n_start, n_goal, P)
+        time, rx, ry, ryaw, rv, ra, rj = [], [], [], [], [], [], []
 
-    return pathx, pathy
+        # 경로의 각 시점에 대한 위치, 속도, 가속도, 저크 계산
+        for t in np.arange(0.0, T + dt, dt):
+            time.append(t)
+            rx.append(xqp.calc_point(t))
+            ry.append(yqp.calc_point(t))
 
-# 이동 비용 계산 함수
-def u_cost(u):
-    return math.hypot(u[0], u[1])  # 유클리드 거리를 이용한 비용 계산
+            vx = xqp.calc_first_derivative(t)
+            vy = yqp.calc_first_derivative(t)
+            v = np.hypot(vx, vy)
+            yaw = math.atan2(vy, vx)
+            rv.append(v)
+            ryaw.append(yaw)
 
-# 휴리스틱 비용 함수 F값 계산
-def fvalue(node, n_goal):
-    return node.cost + h(node, n_goal)  # G값과 H값의 합
+            ax = xqp.calc_second_derivative(t)
+            ay = yqp.calc_second_derivative(t)
+            a = np.hypot(ax, ay)
+            if len(rv) >= 2 and rv[-1] - rv[-2] < 0.0:
+                a *= -1
+            ra.append(a)
 
-# 휴리스틱 거리 측정값
-def h(node, n_goal):
-    return math.hypot(node.x - n_goal.x, node.y - n_goal.y) # 맨하탄 거리
+            jx = xqp.calc_third_derivative(t)
+            jy = yqp.calc_third_derivative(t)
+            j = np.hypot(jx, jy)
+            if len(ra) >= 2 and ra[-1] - ra[-2] < 0.0:
+                j *= -1
+            rj.append(j)
 
-# 노드 인덱스 계산 함수
-def calc_index(node, P):
-    return (node.y - P.miny) * P.xw + (node.x - P.minx) # 2차원 배열을 1차원으로
+        # 최대 가속도 및 저크 제한이 충족되는지 확인
+        if max([abs(i) for i in ra]) <= max_accel and max([abs(i) for i in rj]) <= max_jerk:
+            return rx, ry  # 조건을 충족하는 경로 반환
 
-# 가능한 이동 방향 반환 함수
-def get_motion():
-    return [[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1]]
-            #  서       남서      남      남동     동       북동      북        북서
+    return None  # 조건을 충족하는 경로가 없으면 None 반환
 
-# 경로 추출 함수
-def extract_path(closed_set, n_start, n_goal, P):
-    pathx, pathy = [n_goal.x], [n_goal.y]
-    n_ind = calc_index(n_goal, P)
-
-    # 경로를 거슬러 올라가며 좌표를 추출
-    while n_ind != calc_index(n_start, P):
-        node = closed_set[n_ind]
-        pathx.append(node.x)
-        pathy.append(node.y)
-        n_ind = node.pind
-
-    # 좌표를 실제 스케일로 조정
-    pathx = [x for x in reversed(pathx)]
-    pathy = [y for y in reversed(pathy)]
-
-    return pathx, pathy
+def convert_angle(sim_angle):
+    standard_angle = (sim_angle + 90) % 360  # 시뮬레이션 각도를 90도 시계 방향으로 회전
+    return standard_angle  # 라디안으로 변환
 
 # P_ENTRY부터 P_END까지의 좌표 리스트 생성 함수
 def generate_coordinates(p_entry, p_end, num_points=100):
@@ -179,7 +163,6 @@ def extend_path_with_parking(rx, ry, p_entry, p_end):
     
     return rx, ry
 
-
 #=============================================
 # 경로를 생성하는 함수
 # 차량의 시작위치 sx, sy, 시작각도 syaw
@@ -189,8 +172,20 @@ def extend_path_with_parking(rx, ry, p_entry, p_end):
 def planning(sx, sy, syaw, max_acceleration, dt):
     global rx, ry
     print("Start Planning")
+    syaw = np.deg2rad(convert_angle(syaw))  # start yaw angle [rad]
+    sv = 10.0  # start speed [m/s]
+    sa = 0.1  # start accel [m/ss]
+    gx = P_ENTRY[0]  # goal x position [m]
+    gy = P_ENTRY[1]  # goal y position [m]
+    gyaw = np.deg2rad(315.0)  # goal yaw angle [rad]
+    gv = 10.0  # goal speed [m/s]
+    ga = 0.1  # goal accel [m/ss]
+    #max_accel = 1.0  # max accel [m/ss]
+    max_jerk = 0.1  # max jerk [m/sss]
+    #dt = 0.1  # time tick [s]
     # A* 알고리즘 실행
-    rx, ry = astar_planning(sx, sy, 1036, 162)
+    #rx, ry = astar_planning(sx, sy, P_ENTRY[0], P_ENTRY[1])
+    rx, ry=quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_acceleration, max_jerk, dt)
     rx, ry = extend_path_with_parking(rx, ry, P_ENTRY, P_END)
     return rx, ry
 
@@ -202,7 +197,8 @@ def planning(sx, sy, syaw, max_acceleration, dt):
 #=============================================
 def tracking(screen, x, y, yaw, velocity, max_acceleration, dt):
     global rx, ry
-    angle = 50 # -50 ~ 50
-    speed = 50 # -50 ~ 50
-    
-    drive(angle, speed)
+    angle=20 # -20~20
+    speed=50 # -50~50
+
+
+    drive(angle,speed)  # 수정된 각도와 속도로 차량을 구동
