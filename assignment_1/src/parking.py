@@ -180,11 +180,7 @@ def planning(sx, sy, syaw, max_acceleration, dt):
     gyaw = np.deg2rad(315.0)  # goal yaw angle [rad]
     gv = 10.0  # goal speed [m/s]
     ga = 0.1  # goal accel [m/ss]
-    #max_accel = 1.0  # max accel [m/ss]
     max_jerk = 0.1  # max jerk [m/sss]
-    #dt = 0.1  # time tick [s]
-    # A* 알고리즘 실행
-    #rx, ry = astar_planning(sx, sy, P_ENTRY[0], P_ENTRY[1])
     rx, ry=quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_acceleration, max_jerk, dt)
     rx, ry = extend_path_with_parking(rx, ry, P_ENTRY, P_END)
     return rx, ry
