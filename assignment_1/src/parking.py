@@ -72,19 +72,7 @@ class QuinticPolynomial:
     def calc_point(self, t):
         return self.a0 + self.a1 * t + self.a2 * t ** 2 + self.a3 * t ** 3 + self.a4 * t ** 4 + self.a5 * t ** 5
 
-    # 특정 시간에서의 속도 반환
-    def calc_first_derivative(self, t):
-        return self.a1 + 2 * self.a2 * t + 3 * self.a3 * t ** 2 + 4 * self.a4 * t ** 3 + 5 * self.a5 * t ** 4
-
-    # 특정 시간에서의 가속도 반환
-    def calc_second_derivative(self, t):
-        return 2 * self.a2 + 6 * self.a3 * t + 12 * self.a4 * t ** 2 + 20 * self.a5 * t ** 3
-
-    # 특정 시간에서의 저크 반환
-    def calc_third_derivative(self, t):
-        return 6 * self.a3 + 24 * self.a4 * t + 60 * self.a5 * t ** 2
-
-def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_accel, max_jerk, dt):
+def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, dt):
     # 시작 조건과 목표 조건에서의 속도와 가속도 벡터 계산
     vxs = sv * math.cos(syaw)
     vys = sv * math.sin(syaw)
@@ -101,7 +89,7 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
         xqp = QuinticPolynomial(sx, vxs, axs, gx, vxg, axg, T)
         yqp = QuinticPolynomial(sy, vys, ays, gy, vyg, ayg, T)
 
-        time, rx, ry, ryaw, rv, ra, rj = [], [], [], [], [], [], []
+        time, rx, ry=[],[],[]
 
         # 경로의 각 시점에 대한 위치, 속도, 가속도, 저크 계산
         for t in np.arange(0.0, T + dt, dt):
@@ -109,32 +97,7 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_
             rx.append(xqp.calc_point(t))
             ry.append(yqp.calc_point(t))
 
-            vx = xqp.calc_first_derivative(t)
-            vy = yqp.calc_first_derivative(t)
-            v = np.hypot(vx, vy)
-            yaw = math.atan2(vy, vx)
-            rv.append(v)
-            ryaw.append(yaw)
-
-            ax = xqp.calc_second_derivative(t)
-            ay = yqp.calc_second_derivative(t)
-            a = np.hypot(ax, ay)
-            if len(rv) >= 2 and rv[-1] - rv[-2] < 0.0:
-                a *= -1
-            ra.append(a)
-
-            jx = xqp.calc_third_derivative(t)
-            jy = yqp.calc_third_derivative(t)
-            j = np.hypot(jx, jy)
-            if len(ra) >= 2 and ra[-1] - ra[-2] < 0.0:
-                j *= -1
-            rj.append(j)
-
-        # 최대 가속도 및 저크 제한이 충족되는지 확인
-        if max([abs(i) for i in ra]) <= max_accel and max([abs(i) for i in rj]) <= max_jerk:
-            return rx, ry  # 조건을 충족하는 경로 반환
-
-    return None  # 조건을 충족하는 경로가 없으면 None 반환
+    return rx, ry  # 조건을 충족하는 경로 반환
 
 def convert_angle(sim_angle):
     standard_angle = (sim_angle + 90) % 360  # 시뮬레이션 각도를 90도 시계 방향으로 회전
@@ -181,7 +144,7 @@ def planning(sx, sy, syaw, max_acceleration, dt):
     gv = 10.0  # goal speed [m/s]
     ga = 0.1  # goal accel [m/ss]
     max_jerk = 0.1  # max jerk [m/sss]
-    rx, ry=quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, max_acceleration, max_jerk, dt)
+    rx, ry=quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, dt)
     rx, ry = extend_path_with_parking(rx, ry, P_ENTRY, P_END)
     return rx, ry
 
