@@ -45,8 +45,8 @@ def drive(angle, speed):
 
 
 # parameter
-MAX_T = 100.0  # 목표에 도달하기 위한 최대 허용 시간 (초)
-MIN_T = 5.0    # 목표에 도달하기 위한 최소 허용 시간 (초)
+MAX_T = 50.0  # 목표에 도달하기 위한 최대 허용 시간 (초)
+MIN_T = 1.0    # 목표에 도달하기 위한 최소 허용 시간 (초)
 
 class QuinticPolynomial:
     def __init__(self, xs, vxs, axs, xe, vxe, axe, time):
@@ -91,7 +91,7 @@ def quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, dt):
 
         time, rx, ry=[],[],[]
 
-        # 경로의 각 시점에 대한 위치, 속도, 가속도, 저크 계산
+        # 경로의 각 시점에 대한 위치 계산
         for t in np.arange(0.0, T + dt, dt):
             time.append(t)
             rx.append(xqp.calc_point(t))
@@ -143,7 +143,6 @@ def planning(sx, sy, syaw, max_acceleration, dt):
     gyaw = np.deg2rad(315.0)  # goal yaw angle [rad]
     gv = 10.0  # goal speed [m/s]
     ga = 0.1  # goal accel [m/ss]
-    max_jerk = 0.1  # max jerk [m/sss]
     rx, ry=quintic_polynomials_planner(sx, sy, syaw, sv, sa, gx, gy, gyaw, gv, ga, dt)
     rx, ry = extend_path_with_parking(rx, ry, P_ENTRY, P_END)
     return rx, ry
