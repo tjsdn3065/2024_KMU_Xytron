@@ -3,7 +3,7 @@
 ---
 
 ## 📄 대회 포스터
-![대회 포스터](images/poster-1.png)
+![대회 포스터](/home/irl/2024_kmu_xytron_competition/2024_KMU_Xytron/images/poster-1.png)
 
 ---
 
